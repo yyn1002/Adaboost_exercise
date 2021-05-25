@@ -1,4 +1,3 @@
-# coding:UTF-8
 import matplotlib
 from numpy import *
 import numpy as np
