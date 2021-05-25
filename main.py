@@ -1,6 +1,7 @@
+# coding:UTF-8
 import matplotlib
-import numpy as np
 from numpy import *
+import numpy as np
 import pandas as pd
 from sklearn.datasets import load_iris
 import matplotlib.pyplot as plt
@@ -25,31 +26,7 @@ def create_data():
     return data[:, :2], data[:, -1]
 
 
-def showDataSet(dataMat, labelMat):
-    """
-    数据可视化
-    Parameters:
-        dataMat - 数据矩阵
-        labelMat - 数据标签
-    Returns:
-        无
-    """
-    data_plus = []  # 正样本
-    data_minus = []  # 负样本
-    for i in range(len(dataMat)):
-        if labelMat[i] > 0:
-            data_plus.append(dataMat[i])
-        else:
-            data_minus.append(dataMat[i])
-    data_plus_np = np.array(data_plus)  # 转换为numpy矩阵
-    data_minus_np = np.array(data_minus)  # 转换为numpy矩阵
-    plt.scatter(np.transpose(data_plus_np)[0], np.transpose(data_plus_np)[1])  # 正样本散点图
-    plt.scatter(np.transpose(data_minus_np)[0], np.transpose(data_minus_np)[1])  # 负样本散点图
-    plt.show()
-
-
 def stumpClassify(dataMatrix, dimen, threshVal, threshIneq):
-
     """
     单层决策树分类函数
     Parameters:
@@ -78,14 +55,14 @@ def buildStump(dataArr, classLabels, D):
     Returns:
         bestStump - 最佳单层决策树信息
         minError - 最小误差
-        bestClasEst - 最佳的分类结果
+        bestClasVal - 最佳的分类结果
     """
     dataMatrix = np.mat(dataArr)
     labelMat = np.mat(classLabels).T
     m, n = np.shape(dataMatrix)
     numSteps = 10.0
     bestStump = {}
-    bestClasEst = np.mat(np.zeros((m, 1)))
+    bestClasVal = np.mat(np.zeros((m, 1)))
     minError = float('inf')  # 最小误差初始化为正无穷大
     for i in range(n):  # 遍历所有特征
         rangeMin = dataMatrix[:, i].min()
@@ -101,11 +78,11 @@ def buildStump(dataArr, classLabels, D):
                 # print("split: dim %d, thresh %.2f, thresh ineqal: %s, the weighted error is %.3f" % (i, threshVal, inequal, weightedError))
                 if weightedError < minError:  # 找到误差最小的分类方式
                     minError = weightedError
-                    bestClasEst = predictedVals.copy()
+                    bestClasVal = predictedVals.copy()
                     bestStump['dim'] = i
                     bestStump['thresh'] = threshVal
                     bestStump['ineq'] = inequal
-    return bestStump, minError, bestClasEst
+    return bestStump, minError, bestClasVal
 
 
 def adaBoostTrainDS(dataArr, classLabels, numIt=40):
@@ -117,30 +94,30 @@ def adaBoostTrainDS(dataArr, classLabels, numIt=40):
         numIt - 最大迭代次数
     Returns:
         weakClassArr - 训练好的分类器
-        aggClassEst - 类别估计累计值
+        aggClassVal - 类别估计累计值
     """
     weakClassArr = []
     m = np.shape(dataArr)[0]
     D = np.mat(np.ones((m, 1)) / m)  # 初始化权重
-    aggClassEst = np.mat(np.zeros((m, 1)))
+    aggClassVal = np.mat(np.zeros((m, 1)))
     for i in range(numIt):
-        bestStump, error, classEst = buildStump(dataArr, classLabels, D)  # 构建单层决策树
+        bestStump, error, classVal = buildStump(dataArr, classLabels, D)  # 构建单层决策树
         # print("D:",D.T)
         alpha = float(0.5 * np.log((1.0 - error) / max(error, 1e-16)))  # 计算弱学习算法权重alpha,使error不等于0,因为分母不能为0
         bestStump['alpha'] = alpha  # 存储弱学习算法权重
         weakClassArr.append(bestStump)  # 存储单层决策树
-        # print("classEst: ", classEst.T)
-        expon = np.multiply(-1 * alpha * np.mat(classLabels).T, classEst)  # 计算e的指数项
+        # print("classVal: ", classVal.T)
+        expon = np.multiply(-1 * alpha * np.mat(classLabels).T, classVal)  # 计算e的指数项
         D = np.multiply(D, np.exp(expon))
         D = D / D.sum()  # 根据样本权重公式，更新样本权重
         # 计算AdaBoost误差，当误差为0的时候，退出循环
-        aggClassEst += alpha * classEst  # 计算类别估计累计值
-        # print("aggClassEst: ", aggClassEst.T)
-        aggErrors = np.multiply(np.sign(aggClassEst) != np.mat(classLabels).T, np.ones((m, 1)))  # 计算误差
+        aggClassVal += alpha * classVal  # 计算类别估计累计值
+        # print("aggClassVal: ", aggClassVal.T)
+        aggErrors = np.multiply(np.sign(aggClassVal) != np.mat(classLabels).T, np.ones((m, 1)))  # 计算误差
         errorRate = aggErrors.sum() / m
         # print("total error: ", errorRate)
         if errorRate == 0.0: break  # 误差为0，退出循环
-    return weakClassArr, aggClassEst
+    return weakClassArr, aggClassVal
 
 
 def adaClassify(datToClass, classifierArr):
@@ -154,28 +131,26 @@ def adaClassify(datToClass, classifierArr):
     """
     dataMatrix = np.mat(datToClass)
     m = np.shape(dataMatrix)[0]
-    aggClassEst = np.mat(np.zeros((m, 1)))
+    aggClassVal = np.mat(np.zeros((m, 1)))
     for i in range(len(classifierArr)):  # 遍历所有分类器，进行分类
-        classEst = stumpClassify(dataMatrix, classifierArr[i]['dim'], classifierArr[i]['thresh'],
+        classVal = stumpClassify(dataMatrix, classifierArr[i]['dim'], classifierArr[i]['thresh'],
                                  classifierArr[i]['ineq'])
-        aggClassEst += classifierArr[i]['alpha'] * classEst
-        #print(aggClassEst)
-    return np.sign(aggClassEst)
+        aggClassVal += classifierArr[i]['alpha'] * classVal
+        # print(aggClassVal)
+    return np.sign(aggClassVal)
 
 
 def plot(dataArr, LabelArr):
-    if len(dataArr) != 2:
-        return
 
-    data_plus = [] #正样本
-    data_minus = [] #负样本
+    data_plus = []  # 正样本
+    data_minus = []  # 负样本
     for i in range(len(dataArr)):
         if LabelArr[i] > 0:
             data_plus.append(dataArr[i])
         else:
             data_minus.append(dataArr[i])
-    data_plus_np = np.array(data_plus)                                             #转换为numpy矩阵
-    data_minus_np = np.array(data_minus)                                         #转换为numpy矩阵
+    data_plus_np = np.array(data_plus)  # 转换为numpy矩阵
+    data_minus_np = np.array(data_minus)  # 转换为numpy矩阵
 
     fig = plt.figure(figsize=(5, 4), dpi=140)
 
@@ -191,20 +166,20 @@ def plot(dataArr, LabelArr):
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
-    cm_light = matplotlib.colors.ListedColormap(['c', 'y'])  # 配置颜色
+    cm_light = matplotlib.colors.ListedColormap(['g','y'])  # 配置颜色
     ax.pcolormesh(test_X, test_Y, grid_hat, shading='auto', cmap=cm_light)  # 预测值的显示
-    ax.scatter(np.transpose(data_plus_np)[0], np.transpose(data_plus_np)[1], marker='o')        #正样本散点图
-    ax.scatter(np.transpose(data_minus_np)[0], np.transpose(data_minus_np)[1], marker='s')     #负样本散点图
+    ax.scatter(np.transpose(data_plus_np)[0], np.transpose(data_plus_np)[1], marker='o')  # 正样本散点图
+    ax.scatter(np.transpose(data_minus_np)[0], np.transpose(data_minus_np)[1], marker='s')  # 负样本散点图
 
     plt.show()
 
 
-
 if __name__ == '__main__':
     dataArr, classLabels = create_data()
-    weakClassArr, aggClassEst = adaBoostTrainDS(dataArr, classLabels)
-    print('弱分类器信息为：',weakClassArr)
+    weakClassArr, aggClassVal = adaBoostTrainDS(dataArr, classLabels)
+    print('弱分类器信息为：', weakClassArr)
     predictions = adaClassify(dataArr, weakClassArr)
     errArr = np.mat(np.ones((len(dataArr), 1)))
     print('训练集的错误率为:%.3f%%' % float(errArr[predictions != np.mat(classLabels).T].sum() / len(dataArr) * 100))
     plot(dataArr, classLabels)  # 作图
+
